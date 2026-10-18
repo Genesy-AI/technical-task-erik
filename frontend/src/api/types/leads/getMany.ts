@@ -1,6 +1,11 @@
 /** `null` means the email has never been verified. */
 export type EmailVerificationStatus = 'PENDING' | 'VERIFIED' | 'INVALID' | 'FAILED'
 
+/** `null` means phone enrichment has never run. */
+export type PhoneEnrichmentStatus = 'PENDING' | 'FOUND' | 'NOT_FOUND' | 'FAILED'
+
+export type PhoneProviderId = 'orionConnect' | 'astraDialer' | 'nimbusLookup'
+
 export type LeadsGetManyInput = undefined
 
 export type LeadsGetManyOutput = {
@@ -19,6 +24,9 @@ export type LeadsGetManyOutput = {
   yearsAtCompany: number | null
   linkedinUrl: string | null
   companyWebsite: string | null
+  phoneEnrichmentStatus: PhoneEnrichmentStatus | null
+  /** While PENDING: provider being queried. When FOUND: provider that found the phone. */
+  phoneEnrichmentProvider: PhoneProviderId | null
 }[]
 
 export type Lead = LeadsGetManyOutput[number]

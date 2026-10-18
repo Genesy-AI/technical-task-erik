@@ -1,11 +1,13 @@
-import express, { Request, Response } from 'express'
+import express, { NextFunction, Request, Response } from 'express'
 import { config } from './config'
 import { prisma } from './db'
 import { streamLeadEvents } from './events/leadEventsSse'
 import { startEmailVerification } from './leads/startEmailVerification'
+import { startPhoneEnrichment } from './leads/startPhoneEnrichment'
 import { findUnknownTemplateFields, generateMessageFromTemplate } from './utils/messageGenerator'
 import { hasRequiredLeadFields, sanitizeImportedLead } from './utils/leadImport'
 import { TEMPLATE_FIELDS } from './utils/templateFields'
+import { parseLeadUpdate } from './utils/leadUpdate'
 import { runTemporalWorker } from './worker'
 const app = express()
 app.use(express.json())
@@ -13,7 +15,7 @@ app.use(express.json())
 app.use(function (req, res, next) {
   res.header('Access-Control-Allow-Origin', '*')
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept')
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
 
   if (req.method === 'OPTIONS') {
     res.sendStatus(200)
@@ -65,18 +67,16 @@ app.get('/leads', async (req: Request, res: Response) => {
 })
 
 app.patch('/leads/:id', async (req: Request, res: Response) => {
-  const { id } = req.params
-  const { name, email } = req.body
-  const lead = await prisma.lead.update({
-    where: {
-      id: Number(id),
-    },
-    data: {
-      firstName: String(name),
-      email: String(email),
-    },
-  })
-  res.json(lead)
+  const id = Number(req.params.id)
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: 'Lead id must be a positive integer' })
+  }
+  const parsed = parseLeadUpdate(req.body)
+  if ('error' in parsed) return res.status(400).json({ error: parsed.error })
+
+  const { count } = await prisma.lead.updateMany({ where: { id }, data: parsed.data })
+  if (count === 0) return res.status(404).json({ error: 'Lead not found' })
+  res.json(await prisma.lead.findUnique({ where: { id } }))
 })
 
 app.delete('/leads/:id', async (req: Request, res: Response) => {
@@ -252,30 +252,60 @@ app.post('/leads/bulk', async (req: Request, res: Response) => {
   }
 })
 
-app.post('/leads/verify-emails', async (req: Request, res: Response) => {
-  if (!req.body || typeof req.body !== 'object') {
-    return res.status(400).json({ error: 'Request body is required and must be valid JSON' })
+/** Validates `{ leadIds: number[] }` bodies; returns the de-duplicated ids or an error message. */
+function parseLeadIds(body: unknown): { ids: number[] } | { error: string } {
+  if (!body || typeof body !== 'object') {
+    return { error: 'Request body is required and must be valid JSON' }
   }
 
-  const { leadIds } = req.body as { leadIds?: unknown }
-
+  const { leadIds } = body as { leadIds?: unknown }
   if (!Array.isArray(leadIds) || leadIds.length === 0) {
-    return res.status(400).json({ error: 'leadIds must be a non-empty array' })
+    return { error: 'leadIds must be a non-empty array' }
   }
 
   const ids = [...new Set(leadIds.map((id) => Number(id)))]
   if (ids.some((id) => !Number.isInteger(id) || id <= 0)) {
-    return res.status(400).json({ error: 'leadIds must contain only positive integer ids' })
+    return { error: 'leadIds must contain only positive integer ids' }
   }
+  return { ids }
+}
+
+app.post('/leads/verify-emails', async (req: Request, res: Response) => {
+  const parsed = parseLeadIds(req.body)
+  if ('error' in parsed) return res.status(400).json({ error: parsed.error })
 
   try {
-    const result = await startEmailVerification(ids)
+    const result = await startEmailVerification(parsed.ids)
     // 202: verification runs in the background; results arrive as `lead.updated` events on /leads/events.
     res.status(202).json(result)
   } catch (error) {
     console.error('Error starting email verification:', error)
     res.status(500).json({ error: 'Failed to start email verification' })
   }
+})
+
+app.post('/leads/enrich-phone', async (req: Request, res: Response) => {
+  const parsed = parseLeadIds(req.body)
+  if ('error' in parsed) return res.status(400).json({ error: parsed.error })
+
+  try {
+    const result = await startPhoneEnrichment(parsed.ids)
+    // 202: enrichment runs in the background; progress arrives as `lead.updated` events on /leads/events.
+    res.status(202).json(result)
+  } catch (error) {
+    console.error('Error starting phone enrichment:', error)
+    res.status(500).json({ error: 'Failed to start phone enrichment' })
+  }
+})
+
+// Last middleware: malformed JSON bodies get a 400, and unexpected errors never leak a stack trace.
+app.use((error: unknown, req: Request, res: Response, next: NextFunction) => {
+  if (res.headersSent) return next(error)
+  if (error instanceof SyntaxError && 'body' in error) {
+    return res.status(400).json({ error: 'Request body must be valid JSON' })
+  }
+  console.error(`Unhandled error on ${req.method} ${req.path}:`, error)
+  res.status(500).json({ error: 'Internal server error' })
 })
 
 app.listen(config.port, () => {
