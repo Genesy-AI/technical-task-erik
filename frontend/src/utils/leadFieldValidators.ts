@@ -10,17 +10,26 @@ export const MAX_YEARS_AT_COMPANY = 80
 const MIN_PHONE_DIGITS = 7
 const MAX_PHONE_DIGITS = 20
 
-/** Years at the current company: a whole number between 0 and MAX_YEARS_AT_COMPANY. */
+/**
+ * Years at the current company, stored as whole years between 0 and MAX_YEARS_AT_COMPANY. Decimals are rounded
+ * down ("2.5" -> 2) so tenure is never overstated.
+ *
+ * Future improvement: keep partial years. A decimal is ambiguous because months aren't base 10 ("2.6" may mean
+ * 2 years and 6 months, or 2.6 years = 2 years and ~7 months), so it should be stored in an explicit unit such
+ * as months rather than as a decimal number of years.
+ */
 export const normalizeYearsAtCompany = (value: unknown): number | null => {
   let years: number
   if (typeof value === 'number') {
     years = value
-  } else if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
+  } else if (typeof value === 'string' && /^\d+(\.\d+)?$/.test(value.trim())) {
     years = Number(value.trim())
   } else {
     return null
   }
-  return Number.isInteger(years) && years >= 0 && years <= MAX_YEARS_AT_COMPANY ? years : null
+  if (!Number.isFinite(years) || years < 0) return null
+  const wholeYears = Math.floor(years)
+  return wholeYears <= MAX_YEARS_AT_COMPANY ? wholeYears : null
 }
 
 /**

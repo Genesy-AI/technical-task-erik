@@ -124,8 +124,13 @@ export const parseCsv = (content: string): CsvLead[] => {
           lead.yearsAtCompany = validateOptional(
             trimmedValue,
             normalizeYearsAtCompany,
-            `Invalid years at company "${trimmedValue}" (expected a whole number from 0 to ${MAX_YEARS_AT_COMPANY})`
+            `Invalid years at company "${trimmedValue}" (expected a number from 0 to ${MAX_YEARS_AT_COMPANY})`
           )
+          if (lead.yearsAtCompany !== undefined && lead.yearsAtCompany !== Number(trimmedValue)) {
+            warnings.push(
+              `Years at company "${trimmedValue}" rounded down to ${lead.yearsAtCompany} (whole years only)`
+            )
+          }
           break
         case 'linkedinurl':
         case 'linkedin':

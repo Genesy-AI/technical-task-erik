@@ -69,6 +69,10 @@ describe('sanitizeImportedLead', () => {
     })
   })
 
+  it('rounds fractional years at company down', () => {
+    expect(sanitizeImportedLead({ ...baseLead, yearsAtCompany: 2.5 }).yearsAtCompany).toBe(2)
+  })
+
   it('stores invalid new lead fields as null instead of rejecting the lead', () => {
     const result = sanitizeImportedLead({
       ...baseLead,

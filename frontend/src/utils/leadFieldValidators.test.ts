@@ -16,12 +16,23 @@ describe('normalizeYearsAtCompany', () => {
     expect(normalizeYearsAtCompany(80)).toBe(80)
   })
 
-  it('rejects negative, fractional, out of range and non-numeric values', () => {
+  it('rounds decimals down to whole years', () => {
+    expect(normalizeYearsAtCompany(2.5)).toBe(2)
+    expect(normalizeYearsAtCompany('2.5')).toBe(2)
+    expect(normalizeYearsAtCompany('2.99')).toBe(2)
+    expect(normalizeYearsAtCompany(0.5)).toBe(0)
+    expect(normalizeYearsAtCompany('80.9')).toBe(80)
+  })
+
+  it('rejects negative, out of range and non-numeric values', () => {
     expect(normalizeYearsAtCompany(-1)).toBeNull()
     expect(normalizeYearsAtCompany('-1')).toBeNull()
-    expect(normalizeYearsAtCompany(2.5)).toBeNull()
-    expect(normalizeYearsAtCompany('2.5')).toBeNull()
+    expect(normalizeYearsAtCompany(-0.5)).toBeNull()
     expect(normalizeYearsAtCompany(81)).toBeNull()
+    expect(normalizeYearsAtCompany('81.5')).toBeNull()
+    expect(normalizeYearsAtCompany('2,5')).toBeNull()
+    expect(normalizeYearsAtCompany('2.')).toBeNull()
+    expect(normalizeYearsAtCompany(Infinity)).toBeNull()
     expect(normalizeYearsAtCompany('ten')).toBeNull()
     expect(normalizeYearsAtCompany('5 years')).toBeNull()
     expect(normalizeYearsAtCompany(NaN)).toBeNull()
