@@ -1,3 +1,6 @@
+/** `null` means the email has never been verified. */
+export type EmailVerificationStatus = 'PENDING' | 'VERIFIED' | 'INVALID' | 'FAILED'
+
 export type LeadsGetManyInput = undefined
 
 export type LeadsGetManyOutput = {
@@ -11,5 +14,7 @@ export type LeadsGetManyOutput = {
   countryCode: string | null
   companyName: string | null
   message: string | null
-  emailVerified: boolean | null
+  emailVerificationStatus: EmailVerificationStatus | null
 }[]
+
+export type Lead = LeadsGetManyOutput[number]
