@@ -1,5 +1,12 @@
 import Papa from 'papaparse'
 import { normalizeCountryCode } from './countryCodes'
+import {
+  MAX_YEARS_AT_COMPANY,
+  normalizeCompanyWebsite,
+  normalizeLinkedinUrl,
+  normalizePhoneNumber,
+  normalizeYearsAtCompany,
+} from './leadFieldValidators'
 
 export interface CsvLead {
   firstName: string
@@ -8,6 +15,10 @@ export interface CsvLead {
   jobTitle?: string
   countryCode?: string
   companyName?: string
+  phoneNumber?: string
+  yearsAtCompany?: number
+  linkedinUrl?: string
+  companyWebsite?: string
   isValid: boolean
   /** Problems that prevent the row from being imported. */
   errors: string[]
@@ -55,6 +66,21 @@ export const parseCsv = (content: string): CsvLead[] => {
     const lead: Partial<CsvLead> = { rowIndex: index + 2 }
     const warnings: string[] = []
 
+    /** Optional fields never invalidate a row: an invalid value is dropped with a warning. */
+    const validateOptional = <T>(
+      rawValue: string,
+      normalize: (value: string) => T | null,
+      warning: string
+    ): T | undefined => {
+      if (!rawValue) return undefined
+      const normalized = normalize(rawValue)
+      if (normalized === null) {
+        warnings.push(warning)
+        return undefined
+      }
+      return normalized
+    }
+
     Object.entries(row).forEach(([header, value]) => {
       const normalizedHeader = header.toLowerCase().replace(/[^a-z]/g, '')
       const trimmedValue = value?.trim() || ''
@@ -73,15 +99,51 @@ export const parseCsv = (content: string): CsvLead[] => {
           lead.jobTitle = trimmedValue || undefined
           break
         case 'countrycode':
-          if (trimmedValue) {
-            lead.countryCode = normalizeCountryCode(trimmedValue) ?? undefined
-            if (!lead.countryCode) {
-              warnings.push(`Invalid country code "${trimmedValue}" (expected ISO 3166-1 alpha-2, e.g. ES)`)
-            }
-          }
+          lead.countryCode = validateOptional(
+            trimmedValue,
+            normalizeCountryCode,
+            `Invalid country code "${trimmedValue}" (expected ISO 3166-1 alpha-2, e.g. ES)`
+          )
           break
         case 'companyname':
           lead.companyName = trimmedValue || undefined
+          break
+        case 'phonenumber':
+        case 'phone':
+          lead.phoneNumber = validateOptional(
+            trimmedValue,
+            normalizePhoneNumber,
+            `Invalid phone number "${trimmedValue}"`
+          )
+          break
+        // Assumption: the sample CSVs only provide "yearsInRole"; we treat years in the current role as
+        // years at the current company, since it's the closest data point available.
+        case 'yearsatcompany':
+        case 'yearsincompany':
+        case 'yearsinrole':
+          lead.yearsAtCompany = validateOptional(
+            trimmedValue,
+            normalizeYearsAtCompany,
+            `Invalid years at company "${trimmedValue}" (expected a whole number from 0 to ${MAX_YEARS_AT_COMPANY})`
+          )
+          break
+        case 'linkedinurl':
+        case 'linkedin':
+        case 'linkedinprofile':
+          lead.linkedinUrl = validateOptional(
+            trimmedValue,
+            normalizeLinkedinUrl,
+            `Invalid LinkedIn URL "${trimmedValue}" (expected a linkedin.com URL)`
+          )
+          break
+        case 'companywebsite':
+        case 'website':
+        case 'companydomain':
+          lead.companyWebsite = validateOptional(
+            trimmedValue,
+            normalizeCompanyWebsite,
+            `Invalid company website "${trimmedValue}"`
+          )
           break
       }
     })

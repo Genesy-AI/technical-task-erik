@@ -293,4 +293,82 @@ Latasha,Martin,aprilmcconnell@gmail.com,Diagnostic radiographer,XXX,Bates Inc,10
       expect(result.map((lead) => lead.isValid)).toEqual([true, false, true, true])
     })
   })
+
+  describe('phone, years at company, LinkedIn and company website', () => {
+    it('should parse the sample CSV columns (yearsInRole maps to yearsAtCompany)', () => {
+      const csv = `firstName,lastName,email,jobTitle,countryCode,companyName,yearsInRole,phoneNumber
+Chad,Smith,hancockjames@gmail.com,Child psychotherapist,TV,Global Tech Solutions,2,+1-280-754-0462x2154`
+
+      const result = parseCsv(csv)
+
+      expect(result[0]).toMatchObject({
+        yearsAtCompany: 2,
+        phoneNumber: '+1-280-754-0462x2154',
+        isValid: true,
+        warnings: [],
+      })
+    })
+
+    it.each([
+      ['phoneNumber', 'yearsAtCompany', 'linkedinUrl', 'companyWebsite'],
+      ['Phone', 'Years In Company', 'LinkedIn', 'Website'],
+      ['phone_number', 'years_at_company', 'linkedin_profile', 'company_domain'],
+      ['PHONE', 'yearsInRole', 'LINKEDIN URL', 'Company Website'],
+    ])('should accept header spellings %s, %s, %s, %s', (phone, years, linkedin, website) => {
+      const csv = `firstName,lastName,email,${phone},${years},${linkedin},${website}
+Ada,Lovelace,ada@example.com,(731)123-9702,0,linkedin.com/in/ada,https://www.Example.com/about`
+
+      const result = parseCsv(csv)
+
+      expect(result[0]).toMatchObject({
+        phoneNumber: '(731)123-9702',
+        yearsAtCompany: 0,
+        linkedinUrl: 'https://linkedin.com/in/ada',
+        companyWebsite: 'example.com',
+        isValid: true,
+        warnings: [],
+      })
+    })
+
+    it('should drop invalid values with warnings without invalidating the row', () => {
+      const csv = `firstName,lastName,email,phoneNumber,yearsAtCompany,linkedinUrl,companyWebsite
+Ada,Lovelace,ada@example.com,call me,-2,https://example.com/in/ada,Acme Inc`
+
+      const result = parseCsv(csv)
+
+      expect(result[0].isValid).toBe(true)
+      expect(result[0].errors).toEqual([])
+      expect(result[0].phoneNumber).toBeUndefined()
+      expect(result[0].yearsAtCompany).toBeUndefined()
+      expect(result[0].linkedinUrl).toBeUndefined()
+      expect(result[0].companyWebsite).toBeUndefined()
+      expect(result[0].warnings).toEqual([
+        'Invalid phone number "call me"',
+        'Invalid years at company "-2" (expected a whole number from 0 to 80)',
+        'Invalid LinkedIn URL "https://example.com/in/ada" (expected a linkedin.com URL)',
+        'Invalid company website "Acme Inc"',
+      ])
+    })
+
+    it('should reject out of range and fractional years', () => {
+      const csv = `firstName,lastName,email,yearsAtCompany
+Ada,Lovelace,ada@example.com,81
+Bob,Stone,bob@example.com,2.5`
+
+      const result = parseCsv(csv)
+
+      expect(result.map((lead) => lead.yearsAtCompany)).toEqual([undefined, undefined])
+      expect(result.map((lead) => lead.warnings.length)).toEqual([1, 1])
+    })
+
+    it('should leave empty optional values undefined without warnings', () => {
+      const csv = `firstName,lastName,email,phoneNumber,yearsAtCompany,linkedinUrl,companyWebsite
+Ada,Lovelace,ada@example.com,,,,`
+
+      const result = parseCsv(csv)
+
+      expect(result[0].warnings).toEqual([])
+      expect(result[0].yearsAtCompany).toBeUndefined()
+    })
+  })
 })
