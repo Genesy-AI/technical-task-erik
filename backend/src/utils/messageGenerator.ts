@@ -1,3 +1,5 @@
+import { isTemplateFieldKey } from './templateFields'
+
 export interface Lead {
   firstName: string
   lastName?: string | null
@@ -5,37 +7,28 @@ export interface Lead {
   jobTitle?: string | null
   companyName?: string | null
   countryCode?: string | null
+  phoneNumber?: string | null
+  yearsAtCompany?: number | null
+  linkedinUrl?: string | null
+  companyWebsite?: string | null
 }
 
+const TEMPLATE_VARIABLE_REGEX = /\{(\w+)\}/g
+
 export function generateMessageFromTemplate(template: string, lead: Lead): string {
-  let message = template
-
-  const availableFields = {
-    firstName: lead.firstName,
-    lastName: lead.lastName,
-    email: lead.email,
-    jobTitle: lead.jobTitle,
-    companyName: lead.companyName,
-    countryCode: lead.countryCode,
-  }
-
-  const templateVariables = template.match(/\{(\w+)\}/g) || []
-
-  for (const variable of templateVariables) {
-    const fieldName = variable.slice(1, -1)
-
-    if (fieldName in availableFields) {
-      const fieldValue = availableFields[fieldName as keyof typeof availableFields]
-
-      if (fieldValue === null || fieldValue === undefined || fieldValue === '') {
-        throw new Error(`Missing required field: ${fieldName}`)
-      }
-
-      message = message.replace(new RegExp(`\\{${fieldName}\\}`, 'g'), fieldValue)
-    } else {
+  // A single pass with a replacer function: lead values are inserted literally (no `$&`/`$1` expansion) and
+  // are never re-scanned for placeholders.
+  return template.replace(TEMPLATE_VARIABLE_REGEX, (_match, fieldName: string) => {
+    if (!isTemplateFieldKey(fieldName)) {
       throw new Error(`Unknown field in template: ${fieldName}`)
     }
-  }
 
-  return message
+    const fieldValue = lead[fieldName]
+
+    if (fieldValue === null || fieldValue === undefined || fieldValue === '') {
+      throw new Error(`Missing required field: ${fieldName}`)
+    }
+
+    return String(fieldValue)
+  })
 }

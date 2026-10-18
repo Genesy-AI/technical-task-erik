@@ -5,6 +5,7 @@ import { streamLeadEvents } from './events/leadEventsSse'
 import { startEmailVerification } from './leads/startEmailVerification'
 import { generateMessageFromTemplate } from './utils/messageGenerator'
 import { hasRequiredLeadFields, sanitizeImportedLead } from './utils/leadImport'
+import { TEMPLATE_FIELDS } from './utils/templateFields'
 import { runTemporalWorker } from './worker'
 const app = express()
 app.use(express.json())
@@ -41,6 +42,11 @@ app.post('/leads', async (req: Request, res: Response) => {
 
 // Must be registered before `/leads/:id`.
 app.get('/leads/events', streamLeadEvents)
+
+// Registered before `/leads/:id` so "template-fields" isn't captured as an id
+app.get('/leads/template-fields', (req: Request, res: Response) => {
+  res.json(TEMPLATE_FIELDS)
+})
 
 app.get('/leads/:id', async (req: Request, res: Response) => {
   const { id } = req.params
