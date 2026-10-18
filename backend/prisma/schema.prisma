@@ -18,5 +18,13 @@ model lead {
   countryCode String?
   companyName String?
   message     String?
-  emailVerified Boolean?
+  /// null = email has never been verified. See src/leads/emailVerificationStatus.ts for allowed transitions.
+  emailVerificationStatus EmailVerificationStatus?
+}
+
+enum EmailVerificationStatus {
+  PENDING
+  VERIFIED
+  INVALID
+  FAILED
 }
