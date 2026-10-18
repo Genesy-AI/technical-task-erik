@@ -399,7 +399,9 @@ export const LeadsList: FC = () => {
                     <PhoneCell
                       lead={lead}
                       onRetry={() => enrichPhoneMutation.mutate([lead.id])}
-                      isRetrying={enrichPhoneMutation.isPending}
+                      isRetrying={
+                        enrichPhoneMutation.isPending && !!enrichPhoneMutation.variables?.includes(lead.id)
+                      }
                     />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">

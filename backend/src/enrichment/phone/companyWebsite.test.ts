@@ -33,10 +33,22 @@ describe('resolveCompanyWebsite', () => {
     expect(resolveCompanyWebsite({ companyWebsite: '???', email: 'ada@acme.com' })).toBe('acme.com')
   })
 
-  it.each(['ada@gmail.com', 'ada@yahoo.co.uk', 'ada@hotmail.com', 'ada@outlook.es', 'not-an-email'])(
-    'returns null for %s',
-    (email) => {
-      expect(resolveCompanyWebsite({ email })).toBeNull()
-    }
-  )
+  it.each([
+    ['ada@mail.acme.com', 'mail.acme.com'],
+    ['ada@mail.acme.io', 'mail.acme.io'],
+    ['ada@me.acme.co.uk', 'me.acme.co.uk'],
+  ])('keeps company hosts that merely start like a webmail name: %s', (email, expected) => {
+    expect(resolveCompanyWebsite({ email })).toBe(expected)
+  })
+
+  it.each([
+    'ada@gmail.com',
+    'ada@yahoo.co.uk',
+    'ada@hotmail.com',
+    'ada@outlook.es',
+    'ada@yahoo.com.br',
+    'not-an-email',
+  ])('returns null for %s', (email) => {
+    expect(resolveCompanyWebsite({ email })).toBeNull()
+  })
 })

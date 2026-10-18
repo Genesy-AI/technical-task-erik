@@ -11,16 +11,17 @@ export type PhoneEnrichmentState = PhoneEnrichmentStatus | null
  * Allowed transitions:
  *
  *   null ──► PENDING ──► FOUND | NOT_FOUND | FAILED
- *               ▲                  │          │
- *               └──────────────────┴──────────┘  (retry)
+ *               ▲             │        │          │
+ *               └─────────────┴────────┴──────────┘  (retry, only while the lead has no phone)
  *
- * FOUND is terminal: we never overwrite a phone we already have. PENDING → PENDING is not allowed so a
- * lead can only be enriched once at a time.
+ * We never overwrite a phone we already have: entering PENDING additionally requires an empty phone (see
+ * phoneEnrichmentStore), so FOUND is final unless the phone is later removed. PENDING → PENDING is not
+ * allowed so a lead can only be enriched once at a time.
  */
 const TRANSITIONS: Record<PhoneEnrichmentStatus | 'NONE', readonly PhoneEnrichmentStatus[]> = {
   NONE: ['PENDING'],
   PENDING: ['FOUND', 'NOT_FOUND', 'FAILED'],
-  FOUND: [],
+  FOUND: ['PENDING'],
   NOT_FOUND: ['PENDING'],
   FAILED: ['PENDING'],
 }

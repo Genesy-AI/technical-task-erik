@@ -1,6 +1,7 @@
 // Webmail domains say nothing about the lead's employer, so they never stand in for a company website.
+// Only the provider's own domain matches (gmail.com, yahoo.co.uk), never a company host like mail.acme.com.
 const FREE_EMAIL_DOMAIN =
-  /^(gmail|googlemail|yahoo|ymail|hotmail|outlook|live|msn|icloud|me|mac|aol|proton|protonmail|gmx|mail|yandex|zoho)\.[a-z.]+$/
+  /^(gmail|googlemail|yahoo|ymail|hotmail|outlook|live|msn|icloud|me|mac|aol|proton|protonmail|gmx|mail|yandex|zoho)\.(com|net|org|[a-z]{2}|co\.[a-z]{2}|com\.[a-z]{2})$/
 
 /** `https://www.Acme.com/about` → `acme.com`. Returns null for anything that isn't a plausible domain. */
 export function toBareDomain(value: string): string | null {

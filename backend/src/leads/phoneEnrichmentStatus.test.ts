@@ -8,8 +8,8 @@ describe('phone enrichment state machine', () => {
     expect(canTransitionPhoneEnrichment('FAILED', 'PENDING')).toBe(true)
   })
 
-  it('never re-enriches a lead whose phone was found', () => {
-    expect(canTransitionPhoneEnrichment('FOUND', 'PENDING')).toBe(false)
+  it('allows re-enriching a FOUND lead (the store only does so once its phone was removed)', () => {
+    expect(canTransitionPhoneEnrichment('FOUND', 'PENDING')).toBe(true)
   })
 
   it('does not queue a lead that is already being enriched', () => {
@@ -23,6 +23,6 @@ describe('phone enrichment state machine', () => {
   })
 
   it('lists source states for PENDING', () => {
-    expect(phoneEnrichmentSourceStates('PENDING')).toEqual([null, 'NOT_FOUND', 'FAILED'])
+    expect(phoneEnrichmentSourceStates('PENDING')).toEqual([null, 'FOUND', 'NOT_FOUND', 'FAILED'])
   })
 })

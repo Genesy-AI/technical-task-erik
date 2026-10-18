@@ -15,6 +15,14 @@ function sourceStateFilter(to: PhoneEnrichmentStatus): Prisma.leadWhereInput {
   }
 }
 
+/** Leads with a phone (imported, typed in or previously found) are never enriched again. */
+const HAS_NO_PHONE: Prisma.leadWhereInput = { OR: [{ phoneNumber: null }, { phoneNumber: '' }] }
+
+function transitionGuard(to: PhoneEnrichmentStatus): Prisma.leadWhereInput {
+  const states = sourceStateFilter(to)
+  return to === 'PENDING' ? { AND: [states, HAS_NO_PHONE] } : states
+}
+
 async function updateAndPublish(
   leadId: number,
   guard: Prisma.leadWhereInput,
@@ -29,8 +37,9 @@ async function updateAndPublish(
 }
 
 /**
- * Moves a lead to `to` only if the transition is allowed from its current state, in a single conditional
- * UPDATE so concurrent callers cannot both win. Publishes `lead.updated` on success.
+ * Moves a lead to `to` only if the transition is allowed from its current state (and, for PENDING, the
+ * lead has no phone), in a single conditional UPDATE so concurrent callers cannot both win. Publishes
+ * `lead.updated` on success.
  *
  * Returns the updated lead, or `null` when the lead does not exist or the transition is not allowed.
  */
@@ -39,7 +48,7 @@ export function transitionPhoneEnrichmentStatus(
   to: PhoneEnrichmentStatus,
   details: { phoneNumber?: string; provider?: PhoneProviderId | null } = {}
 ): Promise<lead | null> {
-  return updateAndPublish(leadId, sourceStateFilter(to), {
+  return updateAndPublish(leadId, transitionGuard(to), {
     phoneEnrichmentStatus: to,
     phoneEnrichmentProvider: details.provider ?? null,
     ...(details.phoneNumber ? { phoneNumber: details.phoneNumber } : {}),

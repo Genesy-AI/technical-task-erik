@@ -41,8 +41,21 @@ export async function startPhoneEnrichment(leadIds: number[]): Promise<StartPhon
       continue
     }
 
-    // Conditional update: if another request got there first, the lead is already PENDING.
+    // Conditional update: refused if another request got there first (lead already PENDING), or if the
+    // lead gained a phone or was deleted since we read it.
     const pending = await transitionPhoneEnrichmentStatus(lead.id, 'PENDING')
+    if (!pending) {
+      const current = await prisma.lead.findUnique({ where: { id: lead.id } })
+      if (!current) {
+        result.skipped.push({ leadId, reason: 'NOT_FOUND' })
+        continue
+      }
+      if (current.phoneEnrichmentStatus !== 'PENDING') {
+        // Never start a workflow whose result could not be persisted: it would only burn provider calls.
+        result.skipped.push({ leadId, reason: 'HAS_PHONE' })
+        continue
+      }
+    }
 
     try {
       // USE_EXISTING: if an enrichment for this lead is still running, Temporal returns it instead of
