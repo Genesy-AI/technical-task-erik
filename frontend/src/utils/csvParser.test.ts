@@ -226,7 +226,9 @@ Jane,Johnson,jane@example.com`
   })
 
   describe('country code validation', () => {
-    it('should normalize country codes to uppercase', () => {
+    // Normalization rules (case, aliases, accepted codes) are tested in countryCodes.test.ts;
+    // here we only check how the parser uses the result.
+    it('should store the normalized country code without warnings', () => {
       const csv = `firstName,lastName,email,countryCode
 John,Doe,john@example.com, es `
 
@@ -234,13 +236,6 @@ John,Doe,john@example.com, es `
 
       expect(result[0].countryCode).toBe('ES')
       expect(result[0].warnings).toEqual([])
-    })
-
-    it('should map the UK alias to GB', () => {
-      const csv = `firstName,lastName,email,countryCode
-John,Doe,john@example.com,UK`
-
-      expect(parseCsv(csv)[0].countryCode).toBe('GB')
     })
 
     it('should drop invalid country codes with a warning without invalidating the row', () => {

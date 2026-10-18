@@ -42,10 +42,6 @@ describe('sanitizeImportedLead', () => {
     expect(sanitizeImportedLead({ ...baseLead, countryCode: '12' }).countryCode).toBeNull()
   })
 
-  it('maps the UK alias to GB', () => {
-    expect(sanitizeImportedLead({ ...baseLead, countryCode: 'UK' }).countryCode).toBe('GB')
-  })
-
   it('stores missing, blank or non-string optional fields as null', () => {
     const result = sanitizeImportedLead({ ...baseLead, jobTitle: '', companyName: 123 })
     expect(result.jobTitle).toBeNull()
