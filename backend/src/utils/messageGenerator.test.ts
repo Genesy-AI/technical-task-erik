@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateMessageFromTemplate, Lead } from './messageGenerator'
+import { findUnknownTemplateFields, generateMessageFromTemplate, Lead } from './messageGenerator'
 import { TEMPLATE_FIELDS } from './templateFields'
 
 describe('generateMessageFromTemplate', () => {
@@ -109,6 +109,13 @@ describe('generateMessageFromTemplate', () => {
     it('should throw error for unknown field in template', () => {
       const template = 'Hello {firstName} {unknownField}!'
       expect(() => generateMessageFromTemplate(template, fullLead)).toThrow(
+        'Unknown field in template: unknownField'
+      )
+    })
+
+    it('should report an unknown field before a field missing on the lead', () => {
+      const template = 'Hello {lastName} {unknownField}!'
+      expect(() => generateMessageFromTemplate(template, minimalLead)).toThrow(
         'Unknown field in template: unknownField'
       )
     })
@@ -263,5 +270,19 @@ describe('generateMessageFromTemplate', () => {
       const result = generateMessageFromTemplate(template, enrichedLead)
       expect(result.split('|')).toEqual(TEMPLATE_FIELDS.map((field) => String(enrichedLead[field.key])))
     })
+  })
+})
+
+describe('findUnknownTemplateFields', () => {
+  it('returns no fields for a template using only known fields', () => {
+    expect(findUnknownTemplateFields('Hi {firstName} at {companyName}')).toEqual([])
+  })
+
+  it('returns unknown fields deduplicated in order of first appearance', () => {
+    expect(findUnknownTemplateFields('{foo} {firstName} {bar} {foo}')).toEqual(['foo', 'bar'])
+  })
+
+  it('ignores text that is not a valid placeholder', () => {
+    expect(findUnknownTemplateFields('{first-name} {first name} {firstName')).toEqual([])
   })
 })

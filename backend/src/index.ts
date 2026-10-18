@@ -3,7 +3,7 @@ import { config } from './config'
 import { prisma } from './db'
 import { streamLeadEvents } from './events/leadEventsSse'
 import { startEmailVerification } from './leads/startEmailVerification'
-import { generateMessageFromTemplate } from './utils/messageGenerator'
+import { findUnknownTemplateFields, generateMessageFromTemplate } from './utils/messageGenerator'
 import { hasRequiredLeadFields, sanitizeImportedLead } from './utils/leadImport'
 import { TEMPLATE_FIELDS } from './utils/templateFields'
 import { runTemporalWorker } from './worker'
@@ -129,6 +129,14 @@ app.post('/leads/generate-messages', async (req: Request, res: Response) => {
 
   if (!template || typeof template !== 'string') {
     return res.status(400).json({ error: 'template must be a non-empty string' })
+  }
+
+  const unknownFields = findUnknownTemplateFields(template)
+  if (unknownFields.length > 0) {
+    return res.status(400).json({
+      error: `Unknown field${unknownFields.length !== 1 ? 's' : ''} in template: ${unknownFields.map((field) => `{${field}}`).join(', ')}`,
+      unknownFields,
+    })
   }
 
   try {
