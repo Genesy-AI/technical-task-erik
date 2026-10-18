@@ -338,11 +338,15 @@ export const CsvImportModal: FC<CsvImportModalProps> = ({ isOpen, onClose }) => 
                             </span>
                           )}
                         </td>
-                        <td className="px-3 py-2 text-sm text-gray-900">
+                        <td className="px-3 py-2 text-sm text-gray-900 whitespace-nowrap">
                           {lead.firstName} {lead.lastName || ''}
                         </td>
-                        <td className="px-3 py-2 text-sm text-gray-900">{lead.email || '-'}</td>
-                        <td className="px-3 py-2 text-sm text-gray-900">{lead.companyName || '-'}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900 whitespace-nowrap">
+                          {lead.email || '-'}
+                        </td>
+                        <td className="px-3 py-2 text-sm text-gray-900 whitespace-nowrap">
+                          {lead.companyName || '-'}
+                        </td>
                         <td className="px-3 py-2 text-sm text-gray-900">{lead.countryCode || '-'}</td>
                         <td className="px-3 py-2 text-sm text-gray-900 whitespace-nowrap">
                           {lead.phoneNumber || '-'}
@@ -354,9 +358,13 @@ export const CsvImportModal: FC<CsvImportModalProps> = ({ isOpen, onClose }) => 
                         >
                           {lead.linkedinUrl || '-'}
                         </td>
-                        <td className="px-3 py-2 text-sm text-gray-900">{lead.companyWebsite || '-'}</td>
-                        <td className="px-3 py-2 text-sm text-red-600">{lead.errors.join(', ') || '-'}</td>
-                        <td className="px-3 py-2 text-sm text-yellow-700">
+                        <td className="px-3 py-2 text-sm text-gray-900 whitespace-nowrap">
+                          {lead.companyWebsite || '-'}
+                        </td>
+                        <td className="px-3 py-2 text-sm text-red-600 min-w-48">
+                          {lead.errors.join(', ') || '-'}
+                        </td>
+                        <td className="px-3 py-2 text-sm text-yellow-700 min-w-64">
                           {lead.warnings.join(', ') || '-'}
                         </td>
                       </tr>
