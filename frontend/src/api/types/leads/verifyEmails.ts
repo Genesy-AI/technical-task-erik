@@ -2,18 +2,15 @@ export type LeadsVerifyEmailsInput = {
   leadIds: number[]
 }
 
+/** Verification runs in the background; results arrive as `lead.updated` events on `/leads/events`. */
 export type LeadsVerifyEmailsOutput = {
-  success: boolean
-  verifiedCount: number
-  results: Array<{
+  queued: number[]
+  skipped: Array<{
     leadId: number
-    emailVerified: boolean | null
+    reason: 'NOT_FOUND' | 'ALREADY_PENDING'
   }>
   errors: Array<{
     leadId: number
-    leadName: string
     error: string
   }>
 }
-
-

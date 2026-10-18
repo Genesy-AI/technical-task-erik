@@ -2,8 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FC, useState } from 'react'
 import toast from 'react-hot-toast'
 import { api } from '../api'
+import { LeadsGetManyOutput } from '../api/types/leads/getMany'
+import { useLeadEvents } from '../hooks/useLeadEvents'
 import { MessageTemplateModal } from './MessageTemplateModal'
 import { CsvImportModal } from './CsvImportModal'
+import { EmailVerificationBadge } from './EmailVerificationBadge'
 
 export const LeadsList: FC = () => {
   const [selectedLeads, setSelectedLeads] = useState<number[]>([])
@@ -17,7 +20,8 @@ export const LeadsList: FC = () => {
     queryFn: async () => api.leads.getMany(),
     retry: false,
   })
-  
+  useLeadEvents()
+
 
   const deleteLeadsMutation = useMutation({
     mutationFn: async (ids: number[]) => api.leads.deleteMany({ ids }),
@@ -38,18 +42,43 @@ export const LeadsList: FC = () => {
   const verifyEmailsMutation = useMutation({
     mutationFn: async (ids: number[]) => api.leads.verifyEmails({ leadIds: ids }),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['leads', 'getMany'] })
-      setIsEnrichDropdownOpen(false)
-      toast.success(
-        data.verifiedCount === 1
-          ? `Verified ${data.verifiedCount} email`
-          : `Verified ${data.verifiedCount} emails`
+      // Live progress arrives through `useLeadEvents`; mark queued leads as pending right away anyway.
+      const queued = new Set(data.queued)
+      queryClient.setQueryData<LeadsGetManyOutput>(['leads', 'getMany'], (previous) =>
+        previous?.map((lead) => (queued.has(lead.id) ? { ...lead, emailVerificationStatus: 'PENDING' } : lead))
       )
+
+      if (data.queued.length > 0) {
+        toast.success(
+          data.queued.length === 1
+            ? 'Verification started for 1 lead'
+            : `Verification started for ${data.queued.length} leads`
+        )
+      }
+      const alreadyPending = data.skipped.filter((skipped) => skipped.reason === 'ALREADY_PENDING').length
+      if (alreadyPending > 0) {
+        toast(`${alreadyPending} already being verified`)
+      }
+      if (data.errors.length > 0) {
+        toast.error(`Couldn't start verification for ${data.errors.length} lead(s). Please try again.`)
+      }
     },
     onError: () => {
-      toast.error('Failed to verify emails. Please try again.')
+      toast.error('Failed to start email verification. Please try again.')
     }
   })
+
+  const pendingLeadIds = new Set(
+    leads.data?.filter((lead) => lead.emailVerificationStatus === 'PENDING').map((lead) => lead.id)
+  )
+  const verifiableSelectedLeads = selectedLeads.filter((id) => !pendingLeadIds.has(id))
+
+  const handleVerifyEmails = () => {
+    setIsEnrichDropdownOpen(false)
+    if (verifiableSelectedLeads.length > 0) {
+      verifyEmailsMutation.mutate(verifiableSelectedLeads)
+    }
+  }
 
   const handleSelectAll = (checked: boolean) => {
     if (checked && leads.data) {
@@ -148,8 +177,10 @@ export const LeadsList: FC = () => {
                       </div>
                     </button>
                     <button
-                      onClick={() => verifyEmailsMutation.mutate(selectedLeads)}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      onClick={handleVerifyEmails}
+                      disabled={verifiableSelectedLeads.length === 0}
+                      title={verifiableSelectedLeads.length === 0 ? 'Selected leads are already being verified' : undefined}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white transition-colors"
                     >
                       <div className="flex items-center">
                         <svg className="mr-3 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -264,7 +295,14 @@ export const LeadsList: FC = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{lead.email || '-'} {lead.emailVerified === null ? '❓' : lead.emailVerified ? '✅' : '❌'}</div>
+                    <div className="flex items-center gap-2 text-sm text-gray-900">
+                      {lead.email || '-'}
+                      <EmailVerificationBadge
+                        status={lead.emailVerificationStatus}
+                        onRetry={() => verifyEmailsMutation.mutate([lead.id])}
+                        isRetrying={verifyEmailsMutation.isPending}
+                      />
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{lead.jobTitle || '-'}</div>
