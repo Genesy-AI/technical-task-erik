@@ -14,6 +14,24 @@ export function applyLeadUpdate(
 }
 
 /**
+ * Marks queued leads as PENDING, but only those not updated since the request was sent (`updatedAtBefore`).
+ * A lead whose verification finishes before the HTTP response arrives has already been patched by a
+ * `lead.updated` event; overwriting it with PENDING would leave it stuck, since no further event follows.
+ */
+export function markQueuedLeadsPending(
+  leads: LeadsGetManyOutput | undefined,
+  queuedIds: number[],
+  updatedAtBefore: Map<number, string>
+): LeadsGetManyOutput | undefined {
+  const queued = new Set(queuedIds)
+  return leads?.map((lead) =>
+    queued.has(lead.id) && lead.updatedAt === updatedAtBefore.get(lead.id)
+      ? { ...lead, emailVerificationStatus: 'PENDING' }
+      : lead
+  )
+}
+
+/**
  * Subscribes to server-sent lead updates (e.g. email verification progress) and patches the leads cache
  * in place, so the table updates without refetching. Mount once.
  */

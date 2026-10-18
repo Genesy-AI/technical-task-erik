@@ -3,7 +3,7 @@ import { FC, useState } from 'react'
 import toast from 'react-hot-toast'
 import { api } from '../api'
 import { LeadsGetManyOutput } from '../api/types/leads/getMany'
-import { useLeadEvents } from '../hooks/useLeadEvents'
+import { markQueuedLeadsPending, useLeadEvents } from '../hooks/useLeadEvents'
 import { MessageTemplateModal } from './MessageTemplateModal'
 import { CsvImportModal } from './CsvImportModal'
 import { EmailVerificationBadge } from './EmailVerificationBadge'
@@ -41,11 +41,22 @@ export const LeadsList: FC = () => {
 
   const verifyEmailsMutation = useMutation({
     mutationFn: async (ids: number[]) => api.leads.verifyEmails({ leadIds: ids }),
-    onSuccess: (data) => {
-      // Live progress arrives through `useLeadEvents`; mark queued leads as pending right away anyway.
-      const queued = new Set(data.queued)
+    onMutate: (ids) => {
+      const leadsById = new Map(
+        queryClient.getQueryData<LeadsGetManyOutput>(['leads', 'getMany'])?.map((lead) => [lead.id, lead])
+      )
+      const updatedAtBefore = new Map<number, string>()
+      for (const id of ids) {
+        const lead = leadsById.get(id)
+        if (lead) updatedAtBefore.set(id, lead.updatedAt)
+      }
+      return { updatedAtBefore }
+    },
+    onSuccess: (data, _ids, context) => {
+      // Live progress arrives through `useLeadEvents`; this only covers leads no event has reached yet
+      // (e.g. while the SSE connection is down).
       queryClient.setQueryData<LeadsGetManyOutput>(['leads', 'getMany'], (previous) =>
-        previous?.map((lead) => (queued.has(lead.id) ? { ...lead, emailVerificationStatus: 'PENDING' } : lead))
+        markQueuedLeadsPending(previous, data.queued, context.updatedAtBefore)
       )
 
       if (data.queued.length > 0) {
