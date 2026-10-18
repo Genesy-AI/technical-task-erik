@@ -34,9 +34,9 @@ Recommended order: **Now** = contract and safety fixes, access control, and guar
 **Acceptance.** Every endpoint in `frontend/src/api/modules` has a contract test, and they run in CI (IMP-3).
 
 ### IMP-2 · Shared, validated API contract — M
-**Problem.** Request bodies are validated by hand-written `typeof` checks; types are duplicated in `frontend/src/api/types` and implicitly in Prisma. The ISO country list, field validators and template-field registry now exist on **both** sides.
+**Problem.** Request bodies are validated by hand-written `typeof` checks; types are duplicated in `frontend/src/api/types` and implicitly in Prisma. Country-code normalization (`backend/src/utils/countryCodes.ts` and `frontend/src/utils/countryCodes.ts`, each with its own tests), field validators and the template-field registry now exist on **both** sides.
 **Proposal.**
-- Turn the repo into a pnpm workspace with a `packages/contracts` package: zod schemas for every request and response, plus shared validators (country codes, LinkedIn URL, years).
+- Turn the repo into a pnpm workspace with a `packages/contracts` package: zod schemas for every request and response, plus shared validators (country codes, LinkedIn URL, years). Each validator is written and tested once; the backend and the CSV preview import the same function, and `i18n-iso-countries` becomes a dependency of the package only.
 - Backend: one `validate(schema)` middleware that returns 400 with field-level errors.
 - Frontend: infer types from the schemas (`z.infer`) and stop hand-writing them.
 - Optional follow-up: generate an OpenAPI doc from the schemas (zod-to-openapi) for partners.
