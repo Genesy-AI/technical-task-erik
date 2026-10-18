@@ -19,7 +19,9 @@ export const ExternalLink: FC<ExternalLinkProps> = ({ href, title, children }) =
       title={title}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline"
+      // `relative` makes the link the containing block of the sr-only text; otherwise that absolutely positioned
+      // span escapes the table's scroll container and widens the whole page
+      className="relative inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline"
     >
       {children}
       <IconExternalLink size={14} aria-hidden="true" />
