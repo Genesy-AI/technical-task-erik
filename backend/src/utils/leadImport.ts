@@ -1,4 +1,10 @@
 import { normalizeCountryCode } from './countryCodes'
+import {
+  normalizeCompanyWebsite,
+  normalizeLinkedinUrl,
+  normalizePhoneNumber,
+  normalizeYearsAtCompany,
+} from './leadFieldValidators'
 
 export interface ImportedLeadData {
   firstName: string
@@ -7,6 +13,10 @@ export interface ImportedLeadData {
   jobTitle: string | null
   countryCode: string | null
   companyName: string | null
+  phoneNumber: string | null
+  yearsAtCompany: number | null
+  linkedinUrl: string | null
+  companyWebsite: string | null
 }
 
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && !!value.trim()
@@ -37,4 +47,8 @@ export const sanitizeImportedLead = (
   jobTitle: optionalString(lead.jobTitle),
   countryCode: normalizeCountryCode(lead.countryCode),
   companyName: optionalString(lead.companyName),
+  phoneNumber: normalizePhoneNumber(lead.phoneNumber),
+  yearsAtCompany: normalizeYearsAtCompany(lead.yearsAtCompany),
+  linkedinUrl: normalizeLinkedinUrl(lead.linkedinUrl),
+  companyWebsite: normalizeCompanyWebsite(lead.companyWebsite),
 })

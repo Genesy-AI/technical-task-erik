@@ -20,6 +20,10 @@ model lead {
   message     String?
   /// null = email has never been verified. See src/leads/emailVerificationStatus.ts for allowed transitions.
   emailVerificationStatus EmailVerificationStatus?
+  phoneNumber String?
+  yearsAtCompany Int?
+  linkedinUrl String?
+  companyWebsite String?
 }
 
 enum EmailVerificationStatus {
