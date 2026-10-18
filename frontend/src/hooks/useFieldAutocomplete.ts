@@ -98,7 +98,9 @@ export const useFieldAutocomplete = ({
     close: () => setToken(null),
     textareaProps: {
       onKeyDown: handleKeyDown,
+      // onSelect covers caret moves; onInput covers text inserted without key events (paste, IME, etc.)
       onSelect: syncWithCaret,
+      onInput: syncWithCaret,
       onBlur: () => setToken(null),
       'aria-autocomplete': 'list' as const,
       // A textarea can't take role="combobox" (so no aria-expanded); it keeps its textbox role, which
