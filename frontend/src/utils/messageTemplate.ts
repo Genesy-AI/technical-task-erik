@@ -103,6 +103,15 @@ export const insertPlaceholder = (
   }
 }
 
+/** Placeholders in the template that aren't in `knownKeys`, deduplicated in order of first appearance. */
+export const findUnknownFields = (template: string, knownKeys: ReadonlySet<string>): string[] => {
+  const unknown = new Set<string>()
+  for (const [, key] of template.matchAll(TEMPLATE_VARIABLE_REGEX)) {
+    if (!knownKeys.has(key)) unknown.add(key)
+  }
+  return [...unknown]
+}
+
 export type PreviewSegment =
   | { type: 'text'; text: string }
   | { type: 'value'; key: string; text: string }

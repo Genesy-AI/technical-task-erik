@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { TemplateField } from '../api/types/leads/templateFields'
 import {
+  findUnknownFields,
   completePartialToken,
   filterTemplateFields,
   findPartialToken,
@@ -160,5 +161,21 @@ describe('renderTemplatePreview', () => {
 
   it('marks every field as missing when there is no lead', () => {
     expect(renderTemplatePreview('{firstName}', undefined, knownKeys)[0].type).toBe('missing')
+  })
+})
+
+describe('findUnknownFields', () => {
+  const knownKeys = new Set(['firstName', 'companyName'])
+
+  it('returns no fields for a template using only known fields', () => {
+    expect(findUnknownFields('Hi {firstName} at {companyName}', knownKeys)).toEqual([])
+  })
+
+  it('returns unknown fields deduplicated in order of first appearance', () => {
+    expect(findUnknownFields('{foo} {firstName} {bar} {foo}', knownKeys)).toEqual(['foo', 'bar'])
+  })
+
+  it('ignores text that is not a valid placeholder', () => {
+    expect(findUnknownFields('{first-name} {firstName', knownKeys)).toEqual([])
   })
 })

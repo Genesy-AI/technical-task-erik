@@ -2,11 +2,12 @@ import { FC, useState, useEffect, useCallback, useRef, useId, useMemo } from 're
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { isAxiosError } from 'axios'
 import { api } from '../api'
 import type { TemplateField } from '../api/types/leads/templateFields'
 import { useTemplateFields } from '../hooks/useTemplateFields'
 import { useFieldAutocomplete } from '../hooks/useFieldAutocomplete'
-import { insertPlaceholder } from '../utils/messageTemplate'
+import { findUnknownFields, insertPlaceholder } from '../utils/messageTemplate'
 import { FieldPicker } from './messageTemplate/FieldPicker'
 import { FieldOptionList } from './messageTemplate/FieldOptionList'
 import { TemplatePreview } from './messageTemplate/TemplatePreview'
@@ -39,6 +40,11 @@ export const MessageTemplateModal: FC<MessageTemplateModalProps> = ({
   const knownKeys = useMemo(
     () => (templateFields.data ? new Set(templateFields.data.map((field) => field.key)) : undefined),
     [templateFields.data]
+  )
+  // Generation fails for every lead while the template has unknown fields, so don't let the user submit it
+  const unknownFields = useMemo(
+    () => (knownKeys ? findUnknownFields(template, knownKeys) : []),
+    [template, knownKeys]
   )
 
   // Leads are fetched by LeadsList; here we only subscribe to the cached list to preview selected leads
@@ -94,17 +100,22 @@ export const MessageTemplateModal: FC<MessageTemplateModalProps> = ({
           result.errors.length === 1
             ? `${result.errors.length} lead had errors`
             : `${result.errors.length} leads had errors`
-        toast.success(`${successMessage}, but ${errorMessage}. Check details below.`)
+        if (result.generatedCount === 0) {
+          toast.error(`No messages generated: ${errorMessage}. Check details below.`)
+        } else {
+          toast(`${successMessage}, but ${errorMessage}. Check details below.`, { icon: '⚠️' })
+        }
       }
     },
-    onError: () => {
-      toast.error('Failed to generate messages. Please try again.')
+    onError: (error) => {
+      const serverMessage = isAxiosError<{ error?: string }>(error) ? error.response?.data?.error : undefined
+      toast.error(serverMessage ?? 'Failed to generate messages. Please try again.')
     },
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (template.trim() && selectedLeadIds.length > 0) {
+    if (template.trim() && selectedLeadIds.length > 0 && unknownFields.length === 0) {
       setGenerationResult(null)
 
       generateMessagesMutation.mutate({
@@ -320,7 +331,14 @@ export const MessageTemplateModal: FC<MessageTemplateModalProps> = ({
               {(!generationResult || generationResult.errors.length > 0) && (
                 <button
                   type="submit"
-                  disabled={!template.trim() || generateMessagesMutation.isPending}
+                  disabled={
+                    !template.trim() || unknownFields.length > 0 || generateMessagesMutation.isPending
+                  }
+                  title={
+                    unknownFields.length > 0
+                      ? `Remove or fix ${unknownFields.map((key) => `{${key}}`).join(', ')} to generate messages`
+                      : undefined
+                  }
                   className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {generateMessagesMutation.isPending ? (
