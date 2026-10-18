@@ -24,11 +24,22 @@ model lead {
   yearsAtCompany Int?
   linkedinUrl String?
   companyWebsite String?
+  /// null = phone enrichment has never run. See src/leads/phoneEnrichmentStatus.ts for allowed transitions.
+  phoneEnrichmentStatus PhoneEnrichmentStatus?
+  /// While PENDING: provider being queried. When FOUND: provider that found the phone.
+  phoneEnrichmentProvider String?
 }
 
 enum EmailVerificationStatus {
   PENDING
   VERIFIED
   INVALID
+  FAILED
+}
+
+enum PhoneEnrichmentStatus {
+  PENDING
+  FOUND
+  NOT_FOUND
   FAILED
 }

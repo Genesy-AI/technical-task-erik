@@ -1,6 +1,16 @@
-import { PHONE_PROVIDER_TIMEOUT_MS, PhoneProviderId } from './constants'
+import { ApplicationFailure } from '@temporalio/common'
+import { PHONE_PROVIDER_ERROR_TYPES, PHONE_PROVIDER_TIMEOUT_MS, PhoneProviderId } from './constants'
 import { asRecord, FetchFn, normalizePhone, postJson } from './http'
 import { PhoneLookupInput, PhoneProvider, PhoneProviderCredentials, PhoneProvidersConfig } from './types'
+
+function requireApiKey(providerId: PhoneProviderId, apiKey: string) {
+  if (!apiKey) {
+    throw ApplicationFailure.nonRetryable(
+      `${providerId}: API key not configured`,
+      PHONE_PROVIDER_ERROR_TYPES.REJECTED
+    )
+  }
+}
 
 function missing(fields: Record<string, string | null | undefined>): string[] {
   return Object.entries(fields)
@@ -14,6 +24,7 @@ function orionConnect({ baseUrl, apiKey }: PhoneProviderCredentials, fetchFn: Fe
     id: 'orionConnect',
     missingInputs: (input) => missing({ fullName: input.fullName, companyWebsite: input.companyWebsite }),
     async lookup(input) {
+      requireApiKey('orionConnect', apiKey)
       const data = await postJson(
         'orionConnect',
         {
@@ -35,6 +46,7 @@ function astraDialer({ baseUrl, apiKey }: PhoneProviderCredentials, fetchFn: Fet
     id: 'astraDialer',
     missingInputs: (input) => missing({ email: input.email }),
     async lookup(input) {
+      requireApiKey('astraDialer', apiKey)
       const data = await postJson(
         'astraDialer',
         {
@@ -56,6 +68,7 @@ function nimbusLookup({ baseUrl, apiKey }: PhoneProviderCredentials, fetchFn: Fe
     id: 'nimbusLookup',
     missingInputs: (input) => missing({ email: input.email, jobTitle: input.jobTitle }),
     async lookup(input) {
+      requireApiKey('nimbusLookup', apiKey)
       const url = new URL(baseUrl)
       url.searchParams.set('api', apiKey)
       const data = asRecord(

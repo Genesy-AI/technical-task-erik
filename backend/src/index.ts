@@ -3,6 +3,7 @@ import { config } from './config'
 import { prisma } from './db'
 import { streamLeadEvents } from './events/leadEventsSse'
 import { startEmailVerification } from './leads/startEmailVerification'
+import { startPhoneEnrichment } from './leads/startPhoneEnrichment'
 import { findUnknownTemplateFields, generateMessageFromTemplate } from './utils/messageGenerator'
 import { hasRequiredLeadFields, sanitizeImportedLead } from './utils/leadImport'
 import { TEMPLATE_FIELDS } from './utils/templateFields'
@@ -252,29 +253,49 @@ app.post('/leads/bulk', async (req: Request, res: Response) => {
   }
 })
 
-app.post('/leads/verify-emails', async (req: Request, res: Response) => {
-  if (!req.body || typeof req.body !== 'object') {
-    return res.status(400).json({ error: 'Request body is required and must be valid JSON' })
+/** Validates `{ leadIds: number[] }` bodies; returns the de-duplicated ids or an error message. */
+function parseLeadIds(body: unknown): { ids: number[] } | { error: string } {
+  if (!body || typeof body !== 'object') {
+    return { error: 'Request body is required and must be valid JSON' }
   }
 
-  const { leadIds } = req.body as { leadIds?: unknown }
-
+  const { leadIds } = body as { leadIds?: unknown }
   if (!Array.isArray(leadIds) || leadIds.length === 0) {
-    return res.status(400).json({ error: 'leadIds must be a non-empty array' })
+    return { error: 'leadIds must be a non-empty array' }
   }
 
   const ids = [...new Set(leadIds.map((id) => Number(id)))]
   if (ids.some((id) => !Number.isInteger(id) || id <= 0)) {
-    return res.status(400).json({ error: 'leadIds must contain only positive integer ids' })
+    return { error: 'leadIds must contain only positive integer ids' }
   }
+  return { ids }
+}
+
+app.post('/leads/verify-emails', async (req: Request, res: Response) => {
+  const parsed = parseLeadIds(req.body)
+  if ('error' in parsed) return res.status(400).json({ error: parsed.error })
 
   try {
-    const result = await startEmailVerification(ids)
+    const result = await startEmailVerification(parsed.ids)
     // 202: verification runs in the background; results arrive as `lead.updated` events on /leads/events.
     res.status(202).json(result)
   } catch (error) {
     console.error('Error starting email verification:', error)
     res.status(500).json({ error: 'Failed to start email verification' })
+  }
+})
+
+app.post('/leads/enrich-phone', async (req: Request, res: Response) => {
+  const parsed = parseLeadIds(req.body)
+  if ('error' in parsed) return res.status(400).json({ error: parsed.error })
+
+  try {
+    const result = await startPhoneEnrichment(parsed.ids)
+    // 202: enrichment runs in the background; progress arrives as `lead.updated` events on /leads/events.
+    res.status(202).json(result)
+  } catch (error) {
+    console.error('Error starting phone enrichment:', error)
+    res.status(500).json({ error: 'Failed to start phone enrichment' })
   }
 })
 

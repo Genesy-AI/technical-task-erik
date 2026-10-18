@@ -28,3 +28,11 @@ export const PHONE_PROVIDER_ERROR_TYPES = {
   /** 4xx (bad credentials, missing input): retrying won't help. */
   REJECTED: 'PhoneProviderRejected',
 } as const
+
+/**
+ * Each provider gets its own task queue so its rate limit (maxTaskQueueActivitiesPerSecond) is enforced
+ * server-side across every worker, independently of the other providers.
+ */
+export function phoneProviderTaskQueue(baseTaskQueue: string, providerId: PhoneProviderId): string {
+  return `${baseTaskQueue}-phone-${providerId}`
+}
