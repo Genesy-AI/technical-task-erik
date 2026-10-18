@@ -8,6 +8,7 @@ import { MessageTemplateModal } from './MessageTemplateModal'
 import { CsvImportModal } from './CsvImportModal'
 import { EmailVerificationBadge } from './EmailVerificationBadge'
 import { ExternalLink } from './ExternalLink'
+import { PhoneCell } from './PhoneCell'
 
 export const LeadsList: FC = () => {
   const [selectedLeads, setSelectedLeads] = useState<number[]>([])
@@ -84,6 +85,55 @@ export const LeadsList: FC = () => {
     leads.data?.filter((lead) => lead.emailVerificationStatus === 'PENDING').map((lead) => lead.id)
   )
   const verifiableSelectedLeads = selectedLeads.filter((id) => !pendingLeadIds.has(id))
+
+  const enrichPhoneMutation = useMutation({
+    mutationFn: async (ids: number[]) => api.leads.enrichPhone({ leadIds: ids }),
+    onSuccess: (data) => {
+      // Live progress arrives through `useLeadEvents`; mark queued leads as pending right away anyway.
+      const queued = new Set(data.queued)
+      queryClient.setQueryData<LeadsGetManyOutput>(['leads', 'getMany'], (previous) =>
+        previous?.map((lead) =>
+          queued.has(lead.id) ? { ...lead, phoneEnrichmentStatus: 'PENDING', phoneEnrichmentProvider: null } : lead
+        )
+      )
+
+      if (data.queued.length > 0) {
+        toast.success(
+          data.queued.length === 1
+            ? 'Phone search started for 1 lead'
+            : `Phone search started for ${data.queued.length} leads`
+        )
+      }
+      const countSkipped = (reason: string) => data.skipped.filter((skipped) => skipped.reason === reason).length
+      const alreadyPending = countSkipped('ALREADY_PENDING')
+      if (alreadyPending > 0) {
+        toast(`${alreadyPending} already being searched`)
+      }
+      const hasPhone = countSkipped('HAS_PHONE')
+      if (hasPhone > 0) {
+        toast(hasPhone === 1 ? '1 lead already has a phone' : `${hasPhone} leads already have a phone`)
+      }
+      if (data.errors.length > 0) {
+        toast.error(`Couldn't start phone search for ${data.errors.length} lead(s). Please try again.`)
+      }
+    },
+    onError: () => {
+      toast.error('Failed to start phone enrichment. Please try again.')
+    }
+  })
+
+  // Leads with a phone (imported or found) are never re-enriched; pending ones are already in progress.
+  const phoneEnrichableSelectedLeads = selectedLeads.filter((id) => {
+    const lead = leads.data?.find((candidate) => candidate.id === id)
+    return lead && !lead.phoneNumber && lead.phoneEnrichmentStatus !== 'PENDING'
+  })
+
+  const handleEnrichPhone = () => {
+    setIsEnrichDropdownOpen(false)
+    if (phoneEnrichableSelectedLeads.length > 0) {
+      enrichPhoneMutation.mutate(phoneEnrichableSelectedLeads)
+    }
+  }
 
   const handleVerifyEmails = () => {
     setIsEnrichDropdownOpen(false)
@@ -199,6 +249,23 @@ export const LeadsList: FC = () => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12H8m8 0a8 8 0 11-16 0 8 8 0 0116 0zm-8 0V4" />
                         </svg>
                         Verify Email
+                      </div>
+                    </button>
+                    <button
+                      onClick={handleEnrichPhone}
+                      disabled={phoneEnrichableSelectedLeads.length === 0}
+                      title={
+                        phoneEnrichableSelectedLeads.length === 0
+                          ? 'Selected leads already have a phone or are being searched'
+                          : undefined
+                      }
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white transition-colors"
+                    >
+                      <div className="flex items-center">
+                        <svg className="mr-3 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                        </svg>
+                        Enrich Phone
                       </div>
                     </button>
                     <button
@@ -329,7 +396,11 @@ export const LeadsList: FC = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{lead.phoneNumber || '-'}</div>
+                    <PhoneCell
+                      lead={lead}
+                      onRetry={() => enrichPhoneMutation.mutate([lead.id])}
+                      isRetrying={enrichPhoneMutation.isPending}
+                    />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{lead.jobTitle || '-'}</div>
