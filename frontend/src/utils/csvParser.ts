@@ -1,4 +1,5 @@
 import Papa from 'papaparse'
+import { normalizeCountryCode } from './countryCodes'
 
 export interface CsvLead {
   firstName: string
@@ -8,7 +9,10 @@ export interface CsvLead {
   countryCode?: string
   companyName?: string
   isValid: boolean
+  /** Problems that prevent the row from being imported. */
   errors: string[]
+  /** Problems with optional fields: the row is still imported, with the offending field left empty. */
+  warnings: string[]
   rowIndex: number
 }
 
@@ -49,6 +53,7 @@ export const parseCsv = (content: string): CsvLead[] => {
     if (Object.values(row).every((value) => !value)) return
 
     const lead: Partial<CsvLead> = { rowIndex: index + 2 }
+    const warnings: string[] = []
 
     Object.entries(row).forEach(([header, value]) => {
       const normalizedHeader = header.toLowerCase().replace(/[^a-z]/g, '')
@@ -68,7 +73,12 @@ export const parseCsv = (content: string): CsvLead[] => {
           lead.jobTitle = trimmedValue || undefined
           break
         case 'countrycode':
-          lead.countryCode = trimmedValue || undefined
+          if (trimmedValue) {
+            lead.countryCode = normalizeCountryCode(trimmedValue) ?? undefined
+            if (!lead.countryCode) {
+              warnings.push(`Invalid country code "${trimmedValue}" (expected ISO 3166-1 alpha-2, e.g. ES)`)
+            }
+          }
           break
         case 'companyname':
           lead.companyName = trimmedValue || undefined
@@ -96,6 +106,7 @@ export const parseCsv = (content: string): CsvLead[] => {
       email: lead.email || '',
       isValid: errors.length === 0,
       errors,
+      warnings,
     } as CsvLead)
   })
 

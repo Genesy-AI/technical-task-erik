@@ -3,6 +3,7 @@ import express, { Request, Response } from 'express'
 import { Connection, Client } from '@temporalio/client'
 import { verifyEmailWorkflow } from './workflows'
 import { generateMessageFromTemplate } from './utils/messageGenerator'
+import { hasRequiredLeadFields, sanitizeImportedLead } from './utils/leadImport'
 import { runTemporalWorker } from './worker'
 const prisma = new PrismaClient()
 const app = express()
@@ -179,19 +180,7 @@ app.post('/leads/bulk', async (req: Request, res: Response) => {
   }
 
   try {
-    const validLeads = leads.filter((lead) => {
-      return (
-        lead.firstName &&
-        lead.lastName &&
-        lead.email &&
-        typeof lead.firstName === 'string' &&
-        lead.firstName.trim() &&
-        typeof lead.lastName === 'string' &&
-        lead.lastName.trim() &&
-        typeof lead.email === 'string' &&
-        lead.email.trim()
-      )
-    })
+    const validLeads = leads.filter(hasRequiredLeadFields)
 
     if (validLeads.length === 0) {
       return res
@@ -222,14 +211,7 @@ app.post('/leads/bulk', async (req: Request, res: Response) => {
     for (const lead of uniqueLeads) {
       try {
         await prisma.lead.create({
-          data: {
-            firstName: lead.firstName.trim(),
-            lastName: lead.lastName.trim(),
-            email: lead.email.trim(),
-            jobTitle: lead.jobTitle ? lead.jobTitle.trim() : null,
-            countryCode: lead.countryCode ? lead.countryCode.trim() : null,
-            companyName: lead.companyName ? lead.companyName.trim() : null,
-          },
+          data: sanitizeImportedLead(lead),
         })
         importedCount++
       } catch (error) {
