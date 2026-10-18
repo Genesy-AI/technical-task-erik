@@ -14,6 +14,10 @@ const makeLead = (id: number, overrides: Partial<Lead> = {}): Lead => ({
   companyName: null,
   message: null,
   emailVerificationStatus: null,
+  phoneNumber: null,
+  yearsAtCompany: null,
+  linkedinUrl: null,
+  companyWebsite: null,
   ...overrides,
 })
 

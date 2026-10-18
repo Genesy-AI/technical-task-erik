@@ -15,6 +15,10 @@ export type LeadsGetManyOutput = {
   companyName: string | null
   message: string | null
   emailVerificationStatus: EmailVerificationStatus | null
+  phoneNumber: string | null
+  yearsAtCompany: number | null
+  linkedinUrl: string | null
+  companyWebsite: string | null
 }[]
 
 export type Lead = LeadsGetManyOutput[number]
