@@ -66,6 +66,7 @@ John,Doe,john.doe@example.com,Developer,US,Tech Corp`
       companyName: 'Tech Corp',
       isValid: true,
       errors: [],
+      warnings: [],
       rowIndex: 2,
     })
   })
@@ -222,5 +223,79 @@ Jane,Johnson,jane@example.com`
     expect(result[0].lastName).toBe('Doe')
     expect(result[0].email).toBe('john@example.com')
     expect(result[0].isValid).toBe(true)
+  })
+
+  describe('country code validation', () => {
+    it('should normalize country codes to uppercase', () => {
+      const csv = `firstName,lastName,email,countryCode
+John,Doe,john@example.com, es `
+
+      const result = parseCsv(csv)
+
+      expect(result[0].countryCode).toBe('ES')
+      expect(result[0].warnings).toEqual([])
+    })
+
+    it('should map the UK alias to GB', () => {
+      const csv = `firstName,lastName,email,countryCode
+John,Doe,john@example.com,UK`
+
+      expect(parseCsv(csv)[0].countryCode).toBe('GB')
+    })
+
+    it('should drop invalid country codes with a warning without invalidating the row', () => {
+      const csv = `firstName,lastName,email,countryCode
+John,Doe,john@example.com,XXX
+Jane,Smith,jane@example.com,12
+Bob,Stone,bob@example.com,XX`
+
+      const result = parseCsv(csv)
+
+      result.forEach((lead) => {
+        expect(lead.isValid).toBe(true)
+        expect(lead.errors).toEqual([])
+        expect(lead.countryCode).toBeUndefined()
+        expect(lead.warnings).toHaveLength(1)
+      })
+      expect(result[0].warnings[0]).toContain('Invalid country code "XXX"')
+      expect(result[1].warnings[0]).toContain('Invalid country code "12"')
+    })
+
+    it('should not warn when the country code is empty', () => {
+      const csv = `firstName,lastName,email,countryCode
+John,Doe,john@example.com,`
+
+      const result = parseCsv(csv)
+
+      expect(result[0].countryCode).toBeUndefined()
+      expect(result[0].warnings).toEqual([])
+    })
+
+    it('should keep errors and warnings separate', () => {
+      const csv = `firstName,lastName,email,countryCode
+John,,john@example.com,XXX`
+
+      const result = parseCsv(csv)
+
+      expect(result[0].isValid).toBe(false)
+      expect(result[0].errors).toEqual(['Last name is required'])
+      expect(result[0].warnings).toHaveLength(1)
+    })
+
+    it('should import rows from the sample error file without their invalid country codes', () => {
+      // Excerpt of docs/leads-with-errors.csv
+      const csv = `firstName,lastName,email,jobTitle,countryCode,companyName,yearsInRole,phoneNumber
+Iñaki,Álvarez,rodriguezbrian@smith.net,Restaurant manager,ES,Rogers Inc,10,+1-648-901-1274x3620
+Gabrielle,,uharrington@austin.com,Secretary/administrator,XXX,Ray LLC,15,
+Amanda,James,kevin03@beard.net,"Research officer, trade union",12,Page-Bond,15,+1-076-096-4074x6140
+Latasha,Martin,aprilmcconnell@gmail.com,Diagnostic radiographer,XXX,Bates Inc,10,`
+
+      const result = parseCsv(csv)
+
+      expect(result.map((lead) => lead.countryCode)).toEqual(['ES', undefined, undefined, undefined])
+      expect(result.map((lead) => lead.warnings.length)).toEqual([0, 1, 1, 1])
+      // Gabrielle is invalid because of the missing last name, not because of the country code
+      expect(result.map((lead) => lead.isValid)).toEqual([true, false, true, true])
+    })
   })
 })
