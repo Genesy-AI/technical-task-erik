@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { COUNTRY_CODES, normalizeCountryCode } from './countryCodes'
 
 describe('COUNTRY_CODES', () => {
-  it('contains all 249 officially assigned ISO 3166-1 alpha-2 codes', () => {
-    expect(COUNTRY_CODES.size).toBe(249)
+  it('contains the 249 officially assigned ISO 3166-1 alpha-2 codes plus XK (Kosovo)', () => {
+    expect(COUNTRY_CODES.size).toBe(250)
+    expect(COUNTRY_CODES.has('XK')).toBe(true)
     for (const code of COUNTRY_CODES) {
       expect(code).toMatch(/^[A-Z]{2}$/)
     }
@@ -33,6 +34,12 @@ describe('normalizeCountryCode', () => {
     expect(normalizeCountryCode('XX')).toBeNull()
     expect(normalizeCountryCode('E')).toBeNull()
     expect(normalizeCountryCode('Spain')).toBeNull()
+  })
+
+  it('rejects alpha-3 and numeric codes (the column holds alpha-2)', () => {
+    expect(normalizeCountryCode('ESP')).toBeNull()
+    expect(normalizeCountryCode('USA')).toBeNull()
+    expect(normalizeCountryCode('724')).toBeNull()
   })
 
   it('returns null for empty and non-string values', () => {
