@@ -34,6 +34,10 @@ describe('sanitizeImportedLead', () => {
       jobTitle: 'Engineer',
       companyName: 'Acme',
       countryCode: 'GB',
+      phoneNumber: null,
+      yearsAtCompany: null,
+      linkedinUrl: null,
+      companyWebsite: null,
     })
   })
 
@@ -47,5 +51,42 @@ describe('sanitizeImportedLead', () => {
     expect(result.jobTitle).toBeNull()
     expect(result.companyName).toBeNull()
     expect(result.countryCode).toBeNull()
+  })
+
+  it('normalizes the new lead fields', () => {
+    const result = sanitizeImportedLead({
+      ...baseLead,
+      phoneNumber: ' +1-280-754-0462x2154 ',
+      yearsAtCompany: 0,
+      linkedinUrl: 'linkedin.com/in/ada',
+      companyWebsite: 'https://www.acme.com/',
+    })
+    expect(result).toMatchObject({
+      phoneNumber: '+1-280-754-0462x2154',
+      yearsAtCompany: 0,
+      linkedinUrl: 'https://linkedin.com/in/ada',
+      companyWebsite: 'acme.com',
+    })
+  })
+
+  it('rounds fractional years at company down', () => {
+    expect(sanitizeImportedLead({ ...baseLead, yearsAtCompany: 2.5 }).yearsAtCompany).toBe(2)
+  })
+
+  it('stores invalid new lead fields as null instead of rejecting the lead', () => {
+    const result = sanitizeImportedLead({
+      ...baseLead,
+      phoneNumber: 'call me',
+      yearsAtCompany: -3,
+      linkedinUrl: 'https://example.com/in/ada',
+      companyWebsite: 'not a website',
+    })
+    expect(result).toMatchObject({
+      firstName: 'Ada',
+      phoneNumber: null,
+      yearsAtCompany: null,
+      linkedinUrl: null,
+      companyWebsite: null,
+    })
   })
 })

@@ -1,9 +1,12 @@
-import { FC, useState, useRef, useCallback, useMemo, useEffect } from 'react'
+import { FC, Fragment, useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { api } from '../api'
 import { CsvLead, parseCsv } from '../utils/csvParser'
+
+// Columns in the preview table; the issues sub-row spans all of them
+const COLUMN_COUNT = 10
 
 interface CsvImportModalProps {
   isOpen: boolean
@@ -102,6 +105,10 @@ export const CsvImportModal: FC<CsvImportModalProps> = ({ isOpen, onClose }) => 
         jobTitle: lead.jobTitle || undefined,
         countryCode: lead.countryCode || undefined,
         companyName: lead.companyName || undefined,
+        phoneNumber: lead.phoneNumber || undefined,
+        yearsAtCompany: lead.yearsAtCompany,
+        linkedinUrl: lead.linkedinUrl || undefined,
+        companyWebsite: lead.companyWebsite || undefined,
       }))
 
       return api.leads.bulkImport({ leads: leadsToImport })
@@ -240,7 +247,8 @@ export const CsvImportModal: FC<CsvImportModalProps> = ({ isOpen, onClose }) => 
                   </p>
                   <p className="text-sm text-gray-500">
                     CSV must include: firstName, lastName, email (required). Optional: jobTitle, countryCode
-                    (ISO 3166-1 alpha-2, e.g. ES), companyName. Invalid optional values are skipped.
+                    (ISO 3166-1 alpha-2, e.g. ES), companyName, phoneNumber, yearsAtCompany, linkedinUrl,
+                    companyWebsite. Invalid optional values are skipped.
                   </p>
                 </div>
               )}
@@ -294,45 +302,89 @@ export const CsvImportModal: FC<CsvImportModalProps> = ({ isOpen, onClose }) => 
                         Country
                       </th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Errors
+                        Phone
                       </th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Warnings
+                        Years
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        LinkedIn
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Website
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {csvData.map((lead, index) => (
-                      <tr
-                        key={index}
-                        className={
-                          !lead.isValid ? 'bg-red-50' : lead.warnings.length > 0 ? 'bg-yellow-50' : 'bg-white'
-                        }
-                      >
-                        <td className="px-3 py-2 text-sm text-gray-900">{lead.rowIndex - 1}</td>
-                        <td className="px-3 py-2">
-                          {lead.isValid ? (
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full">
-                              Valid
-                            </span>
-                          ) : (
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold text-red-800 bg-red-100 rounded-full">
-                              Invalid
-                            </span>
+                    {csvData.map((lead, index) => {
+                      const rowClassName = !lead.isValid
+                        ? 'bg-red-50'
+                        : lead.warnings.length > 0
+                          ? 'bg-yellow-50'
+                          : 'bg-white'
+                      const hasIssues = lead.errors.length > 0 || lead.warnings.length > 0
+                      return (
+                        <Fragment key={index}>
+                          <tr className={`${rowClassName} ${hasIssues ? 'border-b-0 [&>td]:pb-1' : ''}`}>
+                            <td className="px-3 py-2 text-sm text-gray-900">{lead.rowIndex - 1}</td>
+                            <td className="px-3 py-2">
+                              {lead.isValid ? (
+                                <span className="inline-flex px-2 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full">
+                                  Valid
+                                </span>
+                              ) : (
+                                <span className="inline-flex px-2 py-1 text-xs font-semibold text-red-800 bg-red-100 rounded-full">
+                                  Invalid
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-sm text-gray-900 whitespace-nowrap">
+                              {lead.firstName} {lead.lastName || ''}
+                            </td>
+                            <td className="px-3 py-2 text-sm text-gray-900 whitespace-nowrap">
+                              {lead.email || '-'}
+                            </td>
+                            <td className="px-3 py-2 text-sm text-gray-900 whitespace-nowrap">
+                              {lead.companyName || '-'}
+                            </td>
+                            <td className="px-3 py-2 text-sm text-gray-900">{lead.countryCode || '-'}</td>
+                            <td className="px-3 py-2 text-sm text-gray-900 whitespace-nowrap">
+                              {lead.phoneNumber || '-'}
+                            </td>
+                            <td className="px-3 py-2 text-sm text-gray-900">{lead.yearsAtCompany ?? '-'}</td>
+                            <td
+                              className="px-3 py-2 text-sm text-gray-900 max-w-48 truncate"
+                              title={lead.linkedinUrl}
+                            >
+                              {lead.linkedinUrl || '-'}
+                            </td>
+                            <td className="px-3 py-2 text-sm text-gray-900 whitespace-nowrap">
+                              {lead.companyWebsite || '-'}
+                            </td>
+                          </tr>
+                          {hasIssues && (
+                            // Issues get their own full-width row so they're readable without scrolling sideways
+                            <tr className={rowClassName}>
+                              <td />
+                              <td colSpan={COLUMN_COUNT - 1} className="px-3 pb-2 pt-0">
+                                <ul className="sticky left-3 space-y-0.5 text-xs">
+                                  {lead.errors.map((error) => (
+                                    <li key={error} className="text-red-600">
+                                      {error}
+                                    </li>
+                                  ))}
+                                  {lead.warnings.map((warning) => (
+                                    <li key={warning} className="text-yellow-700">
+                                      {warning}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </td>
+                            </tr>
                           )}
-                        </td>
-                        <td className="px-3 py-2 text-sm text-gray-900">
-                          {lead.firstName} {lead.lastName || ''}
-                        </td>
-                        <td className="px-3 py-2 text-sm text-gray-900">{lead.email || '-'}</td>
-                        <td className="px-3 py-2 text-sm text-gray-900">{lead.companyName || '-'}</td>
-                        <td className="px-3 py-2 text-sm text-gray-900">{lead.countryCode || '-'}</td>
-                        <td className="px-3 py-2 text-sm text-red-600">{lead.errors.join(', ') || '-'}</td>
-                        <td className="px-3 py-2 text-sm text-yellow-700">
-                          {lead.warnings.join(', ') || '-'}
-                        </td>
-                      </tr>
-                    ))}
+                        </Fragment>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>

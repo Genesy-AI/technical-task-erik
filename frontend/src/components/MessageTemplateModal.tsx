@@ -1,8 +1,16 @@
-import { FC, useState, useEffect, useCallback, useRef } from 'react'
+import { FC, useState, useEffect, useCallback, useRef, useId, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { isAxiosError } from 'axios'
 import { api } from '../api'
+import type { TemplateField } from '../api/types/leads/templateFields'
+import { useTemplateFields } from '../hooks/useTemplateFields'
+import { useFieldAutocomplete } from '../hooks/useFieldAutocomplete'
+import { findUnknownFields, insertPlaceholder } from '../utils/messageTemplate'
+import { FieldPicker } from './messageTemplate/FieldPicker'
+import { FieldOptionList } from './messageTemplate/FieldOptionList'
+import { TemplatePreview } from './messageTemplate/TemplatePreview'
 
 interface MessageTemplateModalProps {
   isOpen: boolean
@@ -23,8 +31,50 @@ export const MessageTemplateModal: FC<MessageTemplateModalProps> = ({
     generatedCount: number
     errors: Array<{ leadId: number; leadName: string; error: string }>
   } | null>(null)
+  const [previewIndex, setPreviewIndex] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const suggestionsId = useId()
   const queryClient = useQueryClient()
+
+  const templateFields = useTemplateFields({ enabled: isOpen })
+  const knownKeys = useMemo(
+    () => (templateFields.data ? new Set(templateFields.data.map((field) => field.key)) : undefined),
+    [templateFields.data]
+  )
+  // Generation fails for every lead while the template has unknown fields, so don't let the user submit it
+  const unknownFields = useMemo(
+    () => (knownKeys ? findUnknownFields(template, knownKeys) : []),
+    [template, knownKeys]
+  )
+
+  // Leads are fetched by LeadsList; here we only subscribe to the cached list to preview selected leads
+  const leads = useQuery({
+    queryKey: ['leads', 'getMany'],
+    queryFn: async () => api.leads.getMany(),
+    enabled: false,
+  })
+  const previewLeadId = selectedLeadIds[previewIndex] ?? selectedLeadIds[0]
+  const previewLead = leads.data?.find((lead) => lead.id === previewLeadId)
+
+  useEffect(() => {
+    setPreviewIndex(0)
+  }, [isOpen, selectedLeadIds])
+
+  const updateTemplate = (newTemplate: string, caret: number) => {
+    setTemplate(newTemplate)
+    setTimeout(() => {
+      textareaRef.current?.focus()
+      textareaRef.current?.setSelectionRange(caret, caret)
+    }, 0)
+  }
+
+  const autocomplete = useFieldAutocomplete({
+    listId: suggestionsId,
+    textareaRef,
+    template,
+    onTemplateChange: updateTemplate,
+    fields: templateFields.data,
+  })
 
   const generateMessagesMutation = useMutation({
     mutationFn: async (data: { leadIds: number[]; template: string }) => api.leads.generateMessages(data),
@@ -50,17 +100,22 @@ export const MessageTemplateModal: FC<MessageTemplateModalProps> = ({
           result.errors.length === 1
             ? `${result.errors.length} lead had errors`
             : `${result.errors.length} leads had errors`
-        toast.success(`${successMessage}, but ${errorMessage}. Check details below.`)
+        if (result.generatedCount === 0) {
+          toast.error(`No messages generated: ${errorMessage}. Check details below.`)
+        } else {
+          toast(`${successMessage}, but ${errorMessage}. Check details below.`, { icon: '⚠️' })
+        }
       }
     },
-    onError: () => {
-      toast.error('Failed to generate messages. Please try again.')
+    onError: (error) => {
+      const serverMessage = isAxiosError<{ error?: string }>(error) ? error.response?.data?.error : undefined
+      toast.error(serverMessage ?? 'Failed to generate messages. Please try again.')
     },
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (template.trim() && selectedLeadIds.length > 0) {
+    if (template.trim() && selectedLeadIds.length > 0 && unknownFields.length === 0) {
       setGenerationResult(null)
 
       generateMessagesMutation.mutate({
@@ -106,21 +161,11 @@ export const MessageTemplateModal: FC<MessageTemplateModalProps> = ({
     }
   }, [isOpen, handleClose])
 
-  const availableFields = ['firstName', 'lastName', 'email', 'jobTitle', 'companyName', 'countryCode']
-
-  const insertField = (field: string) => {
-    if (textareaRef.current) {
-      const textarea = textareaRef.current
-      const start = textarea.selectionStart
-      const end = textarea.selectionEnd
-      const newTemplate = template.substring(0, start) + `{${field}}` + template.substring(end)
-      setTemplate(newTemplate)
-
-      setTimeout(() => {
-        textarea.focus()
-        textarea.setSelectionRange(start + field.length + 2, start + field.length + 2)
-      }, 0)
-    }
+  const insertField = (field: TemplateField) => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+    const result = insertPlaceholder(template, textarea.selectionStart, textarea.selectionEnd, field.key)
+    updateTemplate(result.text, result.caret)
   }
 
   if (!isOpen) return null
@@ -156,33 +201,60 @@ export const MessageTemplateModal: FC<MessageTemplateModalProps> = ({
                 Message Template
               </label>
               <div className="space-y-3">
-                <div className="flex flex-wrap gap-2">
-                  <span className="text-sm text-gray-600">Insert field:</span>
-                  {availableFields.map((field) => (
-                    <button
-                      key={field}
-                      type="button"
-                      onClick={() => insertField(field)}
-                      className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors"
-                    >
-                      {`{${field}}`}
-                    </button>
-                  ))}
+                <FieldPicker
+                  fields={templateFields.data}
+                  isLoading={templateFields.isLoading}
+                  isError={templateFields.isError}
+                  onRetry={() => templateFields.refetch()}
+                  onInsert={insertField}
+                />
+                <div className="relative">
+                  <textarea
+                    ref={textareaRef}
+                    id="message-template"
+                    value={template}
+                    onChange={(e) => setTemplate(e.target.value)}
+                    {...autocomplete.textareaProps}
+                    placeholder="Enter your message template here. Type { to insert dynamic values.&#10;&#10;Example: Hi {firstName}, I noticed you work at {companyName} as a {jobTitle}. Would you be interested in..."
+                    className="w-full h-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                    required
+                  />
+                  {autocomplete.isOpen && (
+                    <div className="absolute left-0 right-0 top-full z-20 -mt-1 bg-white border border-gray-200 rounded-md shadow-lg">
+                      <FieldOptionList
+                        id={suggestionsId}
+                        label="Field suggestions"
+                        fields={autocomplete.suggestions}
+                        activeKey={autocomplete.activeKey}
+                        onSelect={autocomplete.accept}
+                        onActiveChange={autocomplete.setActiveIndex}
+                        className="max-h-48 pb-1"
+                      />
+                      <p className="px-3 py-1.5 text-xs text-gray-500 border-t border-gray-200">
+                        Use arrow keys to navigate, Enter or Tab to insert, Esc to dismiss
+                      </p>
+                    </div>
+                  )}
                 </div>
-                <textarea
-                  ref={textareaRef}
-                  id="message-template"
-                  value={template}
-                  onChange={(e) => setTemplate(e.target.value)}
-                  placeholder="Enter your message template here. Use {fieldName} to insert dynamic values.&#10;&#10;Example: Hi {firstName}, I noticed you work at {companyName} as a {jobTitle}. Would you be interested in..."
-                  className="w-full h-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-                  required
+                <TemplatePreview
+                  template={template}
+                  lead={previewLead}
+                  leadName={
+                    previewLead ? `${previewLead.firstName} ${previewLead.lastName ?? ''}`.trim() : undefined
+                  }
+                  knownKeys={knownKeys}
+                  position={previewIndex + 1}
+                  total={selectedLeadIds.length}
+                  onPrevious={() =>
+                    setPreviewIndex((index) => (index - 1 + selectedLeadIds.length) % selectedLeadIds.length)
+                  }
+                  onNext={() => setPreviewIndex((index) => (index + 1) % selectedLeadIds.length)}
                 />
               </div>
               <p className="mt-2 text-sm text-gray-500">
-                Use curly braces around field names (e.g., {`{firstName}`}) to insert dynamic values. If a
-                field is missing for a lead, an error will be shown and no message will be generated for that
-                lead.
+                Type <code>{'{'}</code> or use "Insert field" to add dynamic values (e.g., {`{firstName}`}).
+                If a field is missing for a lead, an error will be shown and no message will be generated for
+                that lead.
               </p>
             </div>
 
@@ -259,7 +331,14 @@ export const MessageTemplateModal: FC<MessageTemplateModalProps> = ({
               {(!generationResult || generationResult.errors.length > 0) && (
                 <button
                   type="submit"
-                  disabled={!template.trim() || generateMessagesMutation.isPending}
+                  disabled={
+                    !template.trim() || unknownFields.length > 0 || generateMessagesMutation.isPending
+                  }
+                  title={
+                    unknownFields.length > 0
+                      ? `Remove or fix ${unknownFields.map((key) => `{${key}}`).join(', ')} to generate messages`
+                      : undefined
+                  }
                   className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {generateMessagesMutation.isPending ? (

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { generateMessageFromTemplate, Lead } from './messageGenerator'
+import { findUnknownTemplateFields, generateMessageFromTemplate, Lead } from './messageGenerator'
+import { TEMPLATE_FIELDS } from './templateFields'
 
 describe('generateMessageFromTemplate', () => {
   const fullLead: Lead = {
@@ -112,6 +113,13 @@ describe('generateMessageFromTemplate', () => {
       )
     })
 
+    it('should report an unknown field before a field missing on the lead', () => {
+      const template = 'Hello {lastName} {unknownField}!'
+      expect(() => generateMessageFromTemplate(template, minimalLead)).toThrow(
+        'Unknown field in template: unknownField'
+      )
+    })
+
     it('should ignore invalid field patterns with hyphens', () => {
       const template = 'Hello {first-name}!'
       const result = generateMessageFromTemplate(template, fullLead)
@@ -205,5 +213,76 @@ describe('generateMessageFromTemplate', () => {
       const result = generateMessageFromTemplate(template, emojiLead)
       expect(result).toBe('Hi John 😊 from TechCorp 🚀!')
     })
+
+    it('should insert replacement patterns in field values literally', () => {
+      const dollarLead: Lead = { firstName: '$&', companyName: "$1 $$ $` $'" }
+      const template = 'Hi {firstName} from {companyName}!'
+      const result = generateMessageFromTemplate(template, dollarLead)
+      expect(result).toBe("Hi $& from $1 $$ $` $'!")
+    })
+
+    it('should not substitute placeholders found inside field values', () => {
+      const braceLead: Lead = { firstName: '{lastName}', lastName: 'Doe' }
+      const result = generateMessageFromTemplate('Hi {firstName}', braceLead)
+      expect(result).toBe('Hi {lastName}')
+    })
+  })
+
+  describe('new lead fields', () => {
+    const enrichedLead: Lead = {
+      ...fullLead,
+      phoneNumber: '+1-280-754-0462',
+      yearsAtCompany: 5,
+      linkedinUrl: 'https://linkedin.com/in/johndoe',
+      companyWebsite: 'techcorp.com',
+    }
+
+    it('should replace phone, LinkedIn and company website', () => {
+      const template = 'Call {phoneNumber}, see {linkedinUrl}, visit {companyWebsite}'
+      const result = generateMessageFromTemplate(template, enrichedLead)
+      expect(result).toBe('Call +1-280-754-0462, see https://linkedin.com/in/johndoe, visit techcorp.com')
+    })
+
+    it('should convert numeric years at company to text', () => {
+      const result = generateMessageFromTemplate('{yearsAtCompany} years at {companyName}', enrichedLead)
+      expect(result).toBe('5 years at Tech Corp')
+    })
+
+    it('should treat 0 years at company as a valid value', () => {
+      const result = generateMessageFromTemplate('{yearsAtCompany} years', {
+        ...enrichedLead,
+        yearsAtCompany: 0,
+      })
+      expect(result).toBe('0 years')
+    })
+
+    it('should throw when a new field is missing on the lead', () => {
+      expect(() => generateMessageFromTemplate('{yearsAtCompany}', fullLead)).toThrow(
+        'Missing required field: yearsAtCompany'
+      )
+      expect(() => generateMessageFromTemplate('{phoneNumber}', { ...fullLead, phoneNumber: null })).toThrow(
+        'Missing required field: phoneNumber'
+      )
+    })
+
+    it('should support every field in the template field registry', () => {
+      const template = TEMPLATE_FIELDS.map((field) => `{${field.key}}`).join('|')
+      const result = generateMessageFromTemplate(template, enrichedLead)
+      expect(result.split('|')).toEqual(TEMPLATE_FIELDS.map((field) => String(enrichedLead[field.key])))
+    })
+  })
+})
+
+describe('findUnknownTemplateFields', () => {
+  it('returns no fields for a template using only known fields', () => {
+    expect(findUnknownTemplateFields('Hi {firstName} at {companyName}')).toEqual([])
+  })
+
+  it('returns unknown fields deduplicated in order of first appearance', () => {
+    expect(findUnknownTemplateFields('{foo} {firstName} {bar} {foo}')).toEqual(['foo', 'bar'])
+  })
+
+  it('ignores text that is not a valid placeholder', () => {
+    expect(findUnknownTemplateFields('{first-name} {first name} {firstName')).toEqual([])
   })
 })

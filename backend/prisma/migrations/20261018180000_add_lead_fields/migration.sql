@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "lead" ADD COLUMN "companyWebsite" TEXT;
+ALTER TABLE "lead" ADD COLUMN "linkedinUrl" TEXT;
+ALTER TABLE "lead" ADD COLUMN "phoneNumber" TEXT;
+ALTER TABLE "lead" ADD COLUMN "yearsAtCompany" INTEGER;
